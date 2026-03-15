@@ -527,6 +527,29 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// ── Firebase array fix ────────────────────────────────────
+// Firebase Realtime DB stores arrays as {0: …, 1: …} objects.
+// These helpers convert them back to proper JS arrays on every read.
+function objectToArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return Object.values(val);
+}
+
+function firebaseToState(data) {
+  if (!data) return { participants: [], results: [] };
+  return {
+    participants: objectToArray(data.participants).map(p => ({
+      ...p,
+      brackets: objectToArray(p.brackets).map(b => ({
+        ...b,
+        picks: objectToArray(b.picks)
+      }))
+    })),
+    results: objectToArray(data.results)
+  };
+}
+
 // ══════════════════════════════════════════════════════════
 // PERSISTENCE  (Firebase or localStorage fallback)
 // ══════════════════════════════════════════════════════════
@@ -547,7 +570,7 @@ function initPersistence() {
     // Load from localStorage and render
     try {
       const s = localStorage.getItem(STORAGE_KEY);
-      if (s) state = JSON.parse(s);
+      if (s) state = firebaseToState(JSON.parse(s));
     } catch(e) { /* ignore */ }
     renderAll();
     return;
@@ -570,7 +593,7 @@ function initPersistence() {
     // Real-time listener — fires on initial load AND every remote change
     stateRef.on('value', snap => {
       const data = snap.val();
-      state = data || { participants: [], results: [] };
+      state = firebaseToState(data);
 
       if (isSaving) {
         // This is the echo of our own write — skip the picks form re-render
@@ -594,7 +617,7 @@ function initPersistence() {
     // Fall back to localStorage
     try {
       const s = localStorage.getItem(STORAGE_KEY);
-      if (s) state = JSON.parse(s);
+      if (s) state = firebaseToState(JSON.parse(s));
     } catch(e) { /* ignore */ }
     renderAll();
   }
@@ -1179,10 +1202,10 @@ function importJSON() {
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!Array.isArray(data.participants) || !Array.isArray(data.results))
-          throw new Error('Missing participants or results arrays.');
+        if (!data.participants || !data.results)
+          throw new Error('Missing participants or results fields.');
         if (!confirm('Replace all current data with the imported snapshot?')) return;
-        state = data; save(); renderAll();
+        state = firebaseToState(data); save(); renderAll();
         alert('Import successful!');
       } catch(err) { alert('Import failed: ' + err.message); }
     };
