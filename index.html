@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>March Madness Bracket Tracker</title>
+
+<!-- Firebase SDKs (compat v8-style API) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<style>
+/* ── Reset & tokens ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #252836;
+  --border: #2e3347;
+  --accent: #f47321;
+  --text: #e8eaf0;
+  --muted: #8b90a0;
+  --green: #4caf7d;
+  --gold: #f4c921;
+  --red: #e57373;
+  --r: 8px;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; min-height: 100vh;
+}
+
+/* ── Setup banner ── */
+#setup-banner {
+  background: #7c5c00; color: #fde68a;
+  padding: 10px 16px; font-size: 13px; text-align: center;
+  display: none;
+}
+#setup-banner a { color: #fde68a; font-weight: 600; }
+
+/* ── Header ── */
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.header-inner {
+  max-width: 1140px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; gap: 10px; flex-wrap: wrap;
+}
+.app-title { font-size: 18px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.app-title span { color: var(--text); font-weight: 400; }
+.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.io-btns { display: flex; gap: 6px; }
+
+/* ── Sync status dot ── */
+#sync-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+}
+#sync-status .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0;
+}
+#sync-status.live   .dot { background: var(--green); }
+#sync-status.offline .dot { background: var(--gold); }
+#sync-status.local  .dot { background: var(--muted); }
+#sync-status.error  .dot { background: var(--red); }
+
+/* ── Nav ── */
+nav {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 53px; z-index: 99;
+}
+.nav-list { max-width: 1140px; margin: 0 auto; display: flex; list-style: none; overflow-x: auto; }
+.nav-list li button {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); padding: 13px 20px; cursor: pointer;
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.nav-list li button:hover { color: var(--text); }
+.nav-list li button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Main ── */
+main { max-width: 1140px; margin: 0 auto; padding: 20px 16px; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── Card ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; margin-bottom: 14px;
+}
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 6px; border: none;
+  cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); }
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid transparent; }
+.btn-ghost:hover { color: var(--text); border-color: var(--border); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-xs { padding: 2px 7px; font-size: 11px; }
+
+/* ── Forms ── */
+.form-group { margin-bottom: 12px; }
+.form-group label, label.field-label {
+  display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+input[type=text], input[type=number], select {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 7px 10px;
+  font-size: 13px; width: 100%; outline: none; transition: border-color .15s;
+}
+input[type=text]:focus, input[type=number]:focus, select:focus { border-color: var(--accent); }
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+select option { background: var(--surface2); }
+
+/* ── Tables ── */
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  background: var(--surface2); color: var(--muted); text-align: left;
+  padding: 9px 11px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td { padding: 9px 11px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(255,255,255,.025); }
+
+/* ── Leaderboard ── */
+.rank-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  font-weight: 700; font-size: 11px;
+}
+.rank-1 { background: var(--gold); color: #000; }
+.rank-2 { background: #b0b7c3; color: #000; }
+.rank-3 { background: #cd7f32; color: #fff; }
+.rank-other { background: var(--surface2); color: var(--muted); }
+.expand-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 2px 5px; font-size: 11px;
+}
+.expand-btn:hover { color: var(--text); }
+.sub-row { display: none; }
+.sub-row.open { display: table-row; }
+.sub-row > td { background: var(--surface2); padding: 0; }
+.sub-inner { padding: 8px 12px 12px; }
+.pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+}
+.pill-orange { background: rgba(244,115,33,.15); color: var(--accent); }
+.pill-green  { background: rgba(76,175,125,.15); color: var(--green); }
+.pill-muted  { background: var(--surface2); color: var(--muted); }
+
+/* ── Participants ── */
+.p-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px; margin-bottom: 10px;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.p-info { flex: 1; min-width: 0; }
+.p-name { font-weight: 600; margin-bottom: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 3px 10px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.chip button {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 12px; padding: 0; line-height: 1;
+  transition: color .15s;
+}
+.chip .chip-rename:hover { color: var(--accent); }
+.chip .chip-del:hover    { color: var(--red); }
+
+/* ── Picks ── */
+.round-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; }
+.round-tab {
+  padding: 5px 13px; border-radius: 20px; font-size: 12px;
+  font-weight: 500; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted); cursor: pointer; transition: all .15s;
+}
+.round-tab.active    { background: var(--accent); border-color: var(--accent); color: #fff; }
+.round-tab.has-picks { border-color: rgba(244,115,33,.5); color: var(--accent); }
+.round-tab.active.has-picks { background: var(--accent); color: #fff; }
+
+.picks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 12px;
+}
+.region-block { background: var(--surface2); border-radius: var(--r); padding: 12px; }
+.region-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--accent); margin-bottom: 10px;
+}
+.pick-row   { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pick-row:last-child { margin-bottom: 0; }
+.pick-label { flex: 0 0 60px; font-size: 11px; color: var(--muted); }
+.pick-input { width: 70px !important; flex-shrink: 0; }
+.pick-check { font-size: 13px; color: var(--green); min-width: 16px; }
+
+/* ── Results ── */
+.result-tag {
+  display: inline-block; padding: 1px 7px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+  background: rgba(244,115,33,.15); color: var(--accent);
+}
+.upset-label { background: rgba(76,175,125,.15); color: var(--green); }
+
+/* ── Scoring ref ── */
+.scoring-ref { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── Utils ── */
+.flex         { display: flex; align-items: center; gap: 8px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.section-title { font-size: 17px; font-weight: 700; }
+.empty-state   { text-align: center; color: var(--muted); padding: 32px 16px; font-size: 13px; }
+.text-muted    { color: var(--muted); }
+.text-green    { color: var(--green); }
+.text-accent   { color: var(--accent); }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  th, td { padding: 7px 8px; font-size: 12px; }
+  .section-title { font-size: 15px; }
+  .picks-grid { grid-template-columns: 1fr 1fr; }
+  .hide-sm { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Setup banner: shown when Firebase is not configured -->
+<div id="setup-banner">
+  ⚠️ Firebase not configured — running in <strong>local-only mode</strong>.
+  Data is saved in this browser only.
+  See the <a href="https://github.com/pranavrajaram/bracket-tracker#firebase-setup" target="_blank">README</a> to enable live sync.
+</div>
+
+<!-- ════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════ -->
+<header>
+  <div class="header-inner">
+    <div class="app-title">🏀 March Madness <span>Tracker</span></div>
+    <div class="header-right">
+      <span id="sync-status" class="local">
+        <span class="dot"></span>
+        <span id="sync-label">Local</span>
+      </span>
+      <div class="io-btns">
+        <button class="btn btn-secondary btn-sm" onclick="exportJSON()">⬇ Export</button>
+        <button class="btn btn-secondary btn-sm" onclick="importJSON()">⬆ Import</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════
+     NAV TABS
+════════════════════════════════════════════ -->
+<nav>
+  <ul class="nav-list">
+    <li><button class="active" onclick="showTab('leaderboard',this)">🏆 Leaderboard</button></li>
+    <li><button onclick="showTab('participants',this)">👥 Participants</button></li>
+    <li><button onclick="showTab('picks',this)">📋 Picks</button></li>
+    <li><button onclick="showTab('results',this)">⚡ Results</button></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ════════════════════════════════════════════
+     LEADERBOARD
+════════════════════════════════════════════ -->
+<div id="tab-leaderboard" class="tab-pane active">
+  <div class="flex-between" style="margin-bottom:16px">
+    <span class="section-title">Leaderboard</span>
+    <span class="text-muted" id="lb-res-count" style="font-size:12px"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table id="lb-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Participant</th>
+          <th>Bracket</th>
+          <th class="hide-sm">R64</th>
+          <th class="hide-sm">R32</th>
+          <th class="hide-sm">S16</th>
+          <th class="hide-sm">E8</th>
+          <th class="hide-sm">FF</th>
+          <th class="hide-sm">CHAMP</th>
+          <th>Upsets</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="lb-body"></tbody>
+    </table>
+    <div id="lb-empty" class="empty-state" style="display:none">
+      No participants yet — add them in the Participants tab!
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card-title">Scoring Reference</div>
+    <div class="scoring-ref">
+      <span class="pill pill-orange">R64 · 1 pt</span>
+      <span class="pill pill-orange">R32 · 2 pt</span>
+      <span class="pill pill-orange">S16 · 3 pt</span>
+      <span class="pill pill-orange">E8 · 5 pt</span>
+      <span class="pill pill-orange">FF · 8 pt</span>
+      <span class="pill pill-orange">CHAMP · 13 pt</span>
+      <span class="pill pill-green">+2 upset bonus when winning seed − losing seed ≥ 3</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:8px">
+      Points awarded for picking the correct winner per round, regardless of who they beat.
+    </p>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     PARTICIPANTS
+════════════════════════════════════════════ -->
+<div id="tab-participants" class="tab-pane">
+  <div class="flex-between" style="margin-bottom:16px">
+    <span class="section-title">Participants</span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Add Participant</div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1" class="form-group" style="margin:0">
+        <input type="text" id="new-p-name" placeholder="e.g. Alex"
+          onkeydown="if(event.key==='Enter')addParticipant()">
+      </div>
+      <button class="btn btn-primary" onclick="addParticipant()">Add</button>
+    </div>
+  </div>
+
+  <div id="p-list"></div>
+  <div id="p-empty" class="empty-state" style="display:none">
+    No participants yet. Add your group members above!
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     PICKS
+════════════════════════════════════════════ -->
+<div id="tab-picks" class="tab-pane">
+  <div class="flex-between" style="margin-bottom:16px">
+    <span class="section-title">Enter Picks</span>
+    <span class="text-muted" style="font-size:12px">Picks are saved per round when you switch rounds or click Save.</span>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="min-width:150px;margin:0">
+        <label class="field-label">Participant</label>
+        <select id="sel-participant" onchange="onSelParticipantChange()">
+          <option value="">— select —</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:170px;margin:0">
+        <label class="field-label">Bracket</label>
+        <select id="sel-bracket" onchange="renderPicksForm()">
+          <option value="">— select —</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="picks-area">
+    <div class="empty-state">Select a participant and bracket to enter picks.</div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     RESULTS
+════════════════════════════════════════════ -->
+<div id="tab-results" class="tab-pane">
+  <div class="flex-between" style="margin-bottom:16px">
+    <span class="section-title">Results <span style="font-size:13px;font-weight:400;color:var(--muted)">(Admin)</span></span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Record a Game Result</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px">
+      <div class="form-group" style="margin:0">
+        <label class="field-label">Round</label>
+        <select id="r-round">
+          <option value="R64">R64 — Round of 64</option>
+          <option value="R32">R32 — Round of 32</option>
+          <option value="S16">S16 — Sweet 16</option>
+          <option value="E8">E8 — Elite 8</option>
+          <option value="FF">FF — Final Four</option>
+          <option value="CHAMP">CHAMP — Championship</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="field-label">Winner Region</label>
+        <select id="r-w-region">
+          <option value="East">East</option>
+          <option value="West">West</option>
+          <option value="South">South</option>
+          <option value="Midwest">Midwest</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="field-label">Winner Seed</label>
+        <input type="number" id="r-w-seed" min="1" max="16" placeholder="1 – 16">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="field-label">Loser Region</label>
+        <select id="r-l-region">
+          <option value="East">East</option>
+          <option value="West">West</option>
+          <option value="South">South</option>
+          <option value="Midwest">Midwest</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="field-label">Loser Seed</label>
+        <input type="number" id="r-l-seed" min="1" max="16" placeholder="1 – 16">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addResult()">Record Result</button>
+  </div>
+
+  <div id="res-list-card" class="card" style="display:none">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">
+        Results entered: <span id="res-total">0</span>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="clearAllResults()">Clear All</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>Winner</th>
+            <th>Loser</th>
+            <th>Upset?</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="res-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// FIREBASE CONFIG
+// ── Paste your Firebase project config here ──────────────
+// Get this from: Firebase Console → Project Settings → Your Apps → SDK setup
+
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAJeexXGkBpte2Z56L9v7aBOQC8EAG7nxk",
+  authDomain:        "march-madness-tracker-7d698.firebaseapp.com",
+  databaseURL:       "https://march-madness-tracker-7d698-default-rtdb.firebaseio.com",
+  projectId:         "march-madness-tracker-7d698",
+  storageBucket:     "march-madness-tracker-7d698.firebasestorage.app",
+  messagingSenderId: "631803697200",
+  appId:             "1:631803697200:web:f02ab7e8cef71d0f28f5f5",
+  measurementId:     "G-RZMG0RJ8JL"
+};
+// ══════════════════════════════════════════════════════════
+// SCORING CONSTANTS  (tweak these to change scoring)
+// ══════════════════════════════════════════════════════════
+const ROUND_POINTS    = { R64: 1, R32: 2, S16: 3, E8: 5, FF: 8, CHAMP: 13 };
+const UPSET_BONUS     = 2;
+const UPSET_THRESHOLD = 3;   // winnerSeed − loserSeed must be ≥ this
+
+const ROUNDS   = ['R64','R32','S16','E8','FF','CHAMP'];
+const REGIONS  = ['East','West','South','Midwest'];
+
+// Per region, how many winners are picked (R64–E8 only)
+const PICKS_PER_REGION = { R64: 8, R32: 4, S16: 2, E8: 1 };
+
+// Fixed R64 matchups as [favored, underdog] pairs (UI labels only)
+const R64_MATCHUPS = [[1,16],[2,15],[3,14],[4,13],[5,12],[6,11],[7,10],[8,9]];
+
+const STORAGE_KEY = 'mmTracker_v1';
+
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+let state    = { participants: [], results: [] };
+let stateRef = null;   // Firebase DatabaseReference (null = local-only mode)
+
+// True when we're about to write our own change — prevents needless re-renders
+// of the picks form on the echo from our own write.
+let isSaving = false;
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// ══════════════════════════════════════════════════════════
+// PERSISTENCE  (Firebase or localStorage fallback)
+// ══════════════════════════════════════════════════════════
+const FB_CONFIGURED = !FIREBASE_CONFIG.apiKey.startsWith('PASTE');
+
+function setStatus(type, label) {
+  const el  = document.getElementById('sync-status');
+  const txt = document.getElementById('sync-label');
+  if (!el || !txt) return;
+  el.className = type;
+  txt.textContent = label;
+}
+
+function initPersistence() {
+  if (!FB_CONFIGURED) {
+    document.getElementById('setup-banner').style.display = 'block';
+    setStatus('local', 'Local only');
+    // Load from localStorage and render
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) state = JSON.parse(s);
+    } catch(e) { /* ignore */ }
+    renderAll();
+    return;
+  }
+
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.database();
+    stateRef = db.ref('mmTracker');
+
+    // Connection indicator
+    db.ref('.info/connected').on('value', snap => {
+      if (snap.val()) {
+        setStatus('live', 'Live');
+      } else {
+        setStatus('offline', 'Offline');
+      }
+    });
+
+    // Real-time listener — fires on initial load AND every remote change
+    stateRef.on('value', snap => {
+      const data = snap.val();
+      state = data || { participants: [], results: [] };
+
+      if (isSaving) {
+        // This is the echo of our own write — skip the picks form re-render
+        isSaving = false;
+        renderLeaderboard();
+        renderParticipants();
+        renderResults();
+        refreshPicksSelectorsOnly();
+      } else {
+        // Remote update from another client
+        renderAll();
+      }
+    }, err => {
+      console.error('Firebase read error:', err);
+      setStatus('error', 'Sync error');
+    });
+
+  } catch(err) {
+    console.error('Firebase init failed:', err);
+    setStatus('error', 'Init error');
+    // Fall back to localStorage
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) state = JSON.parse(s);
+    } catch(e) { /* ignore */ }
+    renderAll();
+  }
+}
+
+function save() {
+  // Always keep localStorage in sync as a local backup
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+  if (stateRef) {
+    isSaving = true;
+    stateRef.set(state).catch(err => {
+      console.error('Firebase write error:', err);
+      isSaving = false;
+      setStatus('error', 'Write error');
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// SCORING
+// ══════════════════════════════════════════════════════════
+function isUpset(winnerSeed, loserSeed) {
+  return (winnerSeed - loserSeed) >= UPSET_THRESHOLD;
+}
+
+// Returns { points, hit, wasUpset }
+function scorePick(pick) {
+  const r = state.results.find(r =>
+    r.round        === pick.round &&
+    r.winnerRegion === pick.winnerRegion &&
+    r.winnerSeed   === Number(pick.winnerSeed)
+  );
+  if (!r) return { points: 0, hit: false, wasUpset: false };
+  const u = isUpset(r.winnerSeed, r.loserSeed);
+  return { points: ROUND_POINTS[pick.round] + (u ? UPSET_BONUS : 0), hit: true, wasUpset: u };
+}
+
+// Returns { breakdown:{R64:n,...}, upsetCount, total, hits }
+function scoreBracket(bracket) {
+  const breakdown = {};
+  ROUNDS.forEach(r => breakdown[r] = 0);
+  let upsetCount = 0, total = 0, hits = 0;
+
+  for (const pick of bracket.picks) {
+    const { points, hit, wasUpset } = scorePick(pick);
+    if (hit) {
+      breakdown[pick.round] = (breakdown[pick.round] || 0) + points;
+      if (wasUpset) upsetCount++;
+      total += points;
+      hits++;
+    }
+  }
+  return { breakdown, upsetCount, total, hits };
+}
+
+// Returns sorted array of { participant, bracketScores:[{bracket,score}], bestScore }
+function buildLeaderboard() {
+  return state.participants
+    .filter(p => p.brackets.length > 0)
+    .map(p => {
+      const bracketScores = p.brackets.map(b => ({ bracket: b, score: scoreBracket(b) }));
+      const bestScore = Math.max(...bracketScores.map(bs => bs.score.total), 0);
+      return { participant: p, bracketScores, bestScore };
+    })
+    .sort((a, b) => b.bestScore - a.bestScore);
+}
+
+// ══════════════════════════════════════════════════════════
+// LEADERBOARD RENDER
+// ══════════════════════════════════════════════════════════
+function renderLeaderboard() {
+  const lb      = buildLeaderboard();
+  const body    = document.getElementById('lb-body');
+  const empty   = document.getElementById('lb-empty');
+  const resCount = document.getElementById('lb-res-count');
+
+  resCount.textContent = `${state.results.length} result${state.results.length !== 1 ? 's' : ''} recorded`;
+
+  if (!lb.length) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  let rank = 1;
+  let html = '';
+
+  for (const { participant: p, bracketScores, bestScore } of lb) {
+    const sorted  = [...bracketScores].sort((a, b) => b.score.total - a.score.total);
+    const best    = sorted[0];
+    const rankCls = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-other';
+    const multi   = sorted.length > 1;
+
+    html += `
+      <tr>
+        <td><span class="rank-badge ${rankCls}">${rank}</span></td>
+        <td style="font-weight:600">${esc(p.name)}</td>
+        <td>${esc(best.bracket.name)}</td>
+        ${ROUNDS.map(r => `<td class="hide-sm">${best.score.breakdown[r] || 0}</td>`).join('')}
+        <td><span class="pill pill-green">+${best.score.upsetCount * UPSET_BONUS}</span></td>
+        <td><span class="pill pill-orange">${best.score.total}</span></td>
+        <td>${multi
+          ? `<button class="expand-btn" id="xbtn-${p.id}" onclick="toggleSub('${p.id}')">▼</button>`
+          : ''
+        }</td>
+      </tr>`;
+
+    if (multi) {
+      html += `
+        <tr class="sub-row" id="sub-${p.id}">
+          <td colspan="12">
+            <div class="sub-inner">
+              <table style="width:100%">
+                <thead><tr>
+                  <th>Bracket</th>
+                  ${ROUNDS.map(r => `<th>${r}</th>`).join('')}
+                  <th>Upsets</th>
+                  <th>Total</th>
+                </tr></thead>
+                <tbody>
+                  ${sorted.map(bs => `
+                    <tr>
+                      <td>${esc(bs.bracket.name)}</td>
+                      ${ROUNDS.map(r => `<td>${bs.score.breakdown[r] || 0}</td>`).join('')}
+                      <td><span class="pill pill-green">+${bs.score.upsetCount * UPSET_BONUS}</span></td>
+                      <td><span class="pill pill-orange">${bs.score.total}</span></td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>`;
+    }
+    rank++;
+  }
+  body.innerHTML = html;
+}
+
+function toggleSub(pid) {
+  const row = document.getElementById('sub-' + pid);
+  const btn = document.getElementById('xbtn-' + pid);
+  if (!row) return;
+  const open = row.classList.toggle('open');
+  if (btn) btn.textContent = open ? '▲' : '▼';
+}
+
+// ══════════════════════════════════════════════════════════
+// PARTICIPANTS
+// ══════════════════════════════════════════════════════════
+function addParticipant() {
+  const inp  = document.getElementById('new-p-name');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  state.participants.push({
+    id: uid(), name,
+    brackets: [{ id: uid(), name: 'Bracket 1', picks: [] }]
+  });
+  save(); inp.value = ''; renderAll();
+}
+
+function removeParticipant(id) {
+  if (!confirm('Remove this participant and all their brackets?')) return;
+  state.participants = state.participants.filter(p => p.id !== id);
+  save(); renderAll();
+}
+
+function addBracket(pid) {
+  const p = state.participants.find(x => x.id === pid);
+  if (!p || p.brackets.length >= 3) return;
+  p.brackets.push({ id: uid(), name: `Bracket ${p.brackets.length + 1}`, picks: [] });
+  save(); renderAll();
+}
+
+function removeBracket(pid, bid) {
+  const p = state.participants.find(x => x.id === pid);
+  if (!p) return;
+  if (p.brackets.length <= 1) { alert('Each participant must have at least one bracket.'); return; }
+  if (!confirm('Remove this bracket and all its picks?')) return;
+  p.brackets = p.brackets.filter(b => b.id !== bid);
+  save(); renderAll();
+}
+
+function renameBracket(pid, bid) {
+  const p = state.participants.find(x => x.id === pid);
+  if (!p) return;
+  const b = p.brackets.find(x => x.id === bid);
+  if (!b) return;
+  const name = prompt('Rename bracket:', b.name);
+  if (name && name.trim()) { b.name = name.trim(); save(); renderAll(); }
+}
+
+function renderParticipants() {
+  const list  = document.getElementById('p-list');
+  const empty = document.getElementById('p-empty');
+  if (!state.participants.length) {
+    list.innerHTML = ''; empty.style.display = 'block'; return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = state.participants.map(p => `
+    <div class="p-card">
+      <div class="p-info">
+        <div class="p-name">${esc(p.name)}</div>
+        <div class="chips">
+          ${p.brackets.map(b => `
+            <span class="chip">
+              📋 ${esc(b.name)}
+              <button class="chip-rename" title="Rename" onclick="renameBracket('${p.id}','${b.id}')">✏️</button>
+              <button class="chip-del"    title="Remove" onclick="removeBracket('${p.id}','${b.id}')">×</button>
+            </span>`).join('')}
+          ${p.brackets.length < 3
+            ? `<button class="btn btn-secondary btn-xs" onclick="addBracket('${p.id}')">+ Bracket</button>`
+            : `<span class="text-muted" style="font-size:11px">Max 3 brackets</span>`}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeParticipant('${p.id}')">Remove</button>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// PICKS
+// ══════════════════════════════════════════════════════════
+let activePicksRound = 'R64';
+
+function onSelParticipantChange() {
+  const pid  = document.getElementById('sel-participant').value;
+  const bsel = document.getElementById('sel-bracket');
+  bsel.innerHTML = '<option value="">— select —</option>';
+  if (!pid) { renderPicksForm(); return; }
+  const p = state.participants.find(x => x.id === pid);
+  if (!p) return;
+  p.brackets.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id; opt.textContent = b.name;
+    bsel.appendChild(opt);
+  });
+  renderPicksForm();
+}
+
+// Full rebuild of both selectors (preserves current selection)
+function refreshPicksSelectors() {
+  const psel   = document.getElementById('sel-participant');
+  const bsel   = document.getElementById('sel-bracket');
+  const curPid = psel.value;
+  const curBid = bsel.value;
+
+  psel.innerHTML = '<option value="">— select —</option>';
+  state.participants.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    if (p.id === curPid) opt.selected = true;
+    psel.appendChild(opt);
+  });
+
+  bsel.innerHTML = '<option value="">— select —</option>';
+  if (curPid) {
+    const p = state.participants.find(x => x.id === curPid);
+    if (p) {
+      p.brackets.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id; opt.textContent = b.name;
+        if (b.id === curBid) opt.selected = true;
+        bsel.appendChild(opt);
+      });
+    }
+  }
+  renderPicksForm();
+}
+
+// Lighter version: rebuild selectors WITHOUT wiping the picks form.
+// Used when a remote update arrives so we don't interrupt in-progress typing.
+function refreshPicksSelectorsOnly() {
+  const psel   = document.getElementById('sel-participant');
+  const bsel   = document.getElementById('sel-bracket');
+  const curPid = psel.value;
+  const curBid = bsel.value;
+
+  psel.innerHTML = '<option value="">— select —</option>';
+  state.participants.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    if (p.id === curPid) opt.selected = true;
+    psel.appendChild(opt);
+  });
+
+  bsel.innerHTML = '<option value="">— select —</option>';
+  if (curPid) {
+    const p = state.participants.find(x => x.id === curPid);
+    if (p) {
+      p.brackets.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id; opt.textContent = b.name;
+        if (b.id === curBid) opt.selected = true;
+        bsel.appendChild(opt);
+      });
+    }
+  }
+  // Only re-render picks form if nothing was selected (nothing to lose)
+  if (!curBid) renderPicksForm();
+}
+
+function getActiveBracket() {
+  const pid = document.getElementById('sel-participant').value;
+  const bid = document.getElementById('sel-bracket').value;
+  if (!pid || !bid) return null;
+  const p = state.participants.find(x => x.id === pid);
+  return p ? (p.brackets.find(b => b.id === bid) || null) : null;
+}
+
+function getPickSeed(bracket, round, region, slot) {
+  const hits = bracket.picks.filter(pk => pk.round === round && pk.winnerRegion === region);
+  return hits[slot] ? hits[slot].winnerSeed : '';
+}
+
+function getFFPick(bracket, round, slot) {
+  const hits = bracket.picks.filter(pk => pk.round === round);
+  return hits[slot] || { winnerRegion: '', winnerSeed: '' };
+}
+
+function roundHasPicks(bracket, round) {
+  return bracket.picks.some(pk => pk.round === round);
+}
+
+function renderPicksForm() {
+  const area    = document.getElementById('picks-area');
+  const bracket = getActiveBracket();
+  if (!bracket) {
+    area.innerHTML = '<div class="empty-state">Select a participant and bracket to enter picks.</div>';
+    return;
+  }
+
+  const tabsHtml = ROUNDS.map(r => {
+    const hasPicks = roundHasPicks(bracket, r);
+    const active   = r === activePicksRound;
+    return `<button class="round-tab${active ? ' active' : ''}${hasPicks ? ' has-picks' : ''}"
+      onclick="switchPicksRound('${r}')">${r}</button>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="round-tabs">${tabsHtml}</div>
+    <div id="picks-round-area"></div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+      <button class="btn btn-primary" onclick="savePicks()">💾 Save Picks</button>
+      <span id="save-msg" style="font-size:12px;color:var(--green);display:none">✓ Saved!</span>
+    </div>`;
+
+  renderPicksRound(bracket);
+}
+
+function renderPicksRound(bracket) {
+  const area  = document.getElementById('picks-round-area');
+  if (!area) return;
+  const round = activePicksRound;
+
+  if (round === 'FF') {
+    let html = '<div class="picks-grid">';
+    for (let i = 0; i < 2; i++) {
+      const cur = getFFPick(bracket, 'FF', i);
+      html += `
+        <div class="region-block">
+          <div class="region-title">Semifinal ${i + 1} Winner</div>
+          <div class="pick-row">
+            <span class="pick-label">Region</span>
+            <select data-ff="${i}" data-type="region" style="width:120px">
+              <option value="">—</option>
+              ${REGIONS.map(r => `<option value="${r}"${cur.winnerRegion === r ? ' selected' : ''}>${r}</option>`).join('')}
+            </select>
+          </div>
+          <div class="pick-row">
+            <span class="pick-label">Seed</span>
+            <input type="number" min="1" max="16" class="pick-input"
+              data-ff="${i}" data-type="seed" value="${cur.winnerSeed || ''}" placeholder="1–16">
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+    area.innerHTML = html;
+    return;
+  }
+
+  if (round === 'CHAMP') {
+    const cur = getFFPick(bracket, 'CHAMP', 0);
+    area.innerHTML = `
+      <div class="picks-grid">
+        <div class="region-block">
+          <div class="region-title">Champion</div>
+          <div class="pick-row">
+            <span class="pick-label">Region</span>
+            <select data-ff="0" data-type="region" style="width:120px">
+              <option value="">—</option>
+              ${REGIONS.map(r => `<option value="${r}"${cur.winnerRegion === r ? ' selected' : ''}>${r}</option>`).join('')}
+            </select>
+          </div>
+          <div class="pick-row">
+            <span class="pick-label">Seed</span>
+            <input type="number" min="1" max="16" class="pick-input"
+              data-ff="0" data-type="seed" value="${cur.winnerSeed || ''}" placeholder="1–16">
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // R64–E8
+  const count = PICKS_PER_REGION[round];
+  let html = '<div class="picks-grid">';
+  for (const region of REGIONS) {
+    html += `<div class="region-block"><div class="region-title">${region}</div>`;
+    for (let i = 0; i < count; i++) {
+      const val       = getPickSeed(bracket, round, region, i);
+      const resultHit = val
+        ? state.results.some(r => r.round === round && r.winnerRegion === region && r.winnerSeed === Number(val))
+        : false;
+      const label = round === 'R64'
+        ? `${R64_MATCHUPS[i][0]} vs ${R64_MATCHUPS[i][1]}`
+        : `Winner ${i + 1}`;
+      html += `
+        <div class="pick-row">
+          <span class="pick-label">${label}</span>
+          <input type="number" min="1" max="16" class="pick-input"
+            data-round="${round}" data-region="${region}" data-slot="${i}"
+            value="${val}" placeholder="seed">
+          <span class="pick-check">${resultHit ? '✓' : ''}</span>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  area.innerHTML = html;
+}
+
+function collectPicksFromForm() {
+  const round = activePicksRound;
+  const picks = [];
+
+  if (round === 'FF' || round === 'CHAMP') {
+    const count = round === 'FF' ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const regEl  = document.querySelector(`[data-ff="${i}"][data-type="region"]`);
+      const seedEl = document.querySelector(`[data-ff="${i}"][data-type="seed"]`);
+      if (regEl && seedEl && regEl.value && seedEl.value) {
+        const seed = Number(seedEl.value);
+        if (seed >= 1 && seed <= 16)
+          picks.push({ round, winnerRegion: regEl.value, winnerSeed: seed });
+      }
+    }
+    return picks;
+  }
+
+  document.querySelectorAll('[data-round][data-region][data-slot]').forEach(el => {
+    const seed = Number(el.value);
+    if (seed >= 1 && seed <= 16)
+      picks.push({ round: el.dataset.round, winnerRegion: el.dataset.region, winnerSeed: seed });
+  });
+  return picks;
+}
+
+function switchPicksRound(round) {
+  commitCurrentRound();
+  activePicksRound = round;
+  const bracket = getActiveBracket();
+  if (!bracket) return;
+  document.querySelectorAll('.round-tab').forEach(btn => {
+    const r = btn.textContent.trim();
+    btn.classList.toggle('active', r === round);
+    btn.classList.toggle('has-picks', roundHasPicks(bracket, r));
+  });
+  renderPicksRound(bracket);
+}
+
+function commitCurrentRound() {
+  const bracket = getActiveBracket();
+  if (!bracket) return;
+  const newPicks = collectPicksFromForm();
+  bracket.picks  = bracket.picks.filter(pk => pk.round !== activePicksRound);
+  bracket.picks.push(...newPicks);
+  save();
+}
+
+function savePicks() {
+  commitCurrentRound();
+  renderLeaderboard();
+  renderPicksForm();
+  const msg = document.getElementById('save-msg');
+  if (msg) {
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// RESULTS
+// ══════════════════════════════════════════════════════════
+function addResult() {
+  const round   = document.getElementById('r-round').value;
+  const wSeed   = Number(document.getElementById('r-w-seed').value);
+  const wRegion = document.getElementById('r-w-region').value;
+  const lSeed   = Number(document.getElementById('r-l-seed').value);
+  const lRegion = document.getElementById('r-l-region').value;
+
+  if (!wSeed || !lSeed || wSeed < 1 || wSeed > 16 || lSeed < 1 || lSeed > 16) {
+    alert('Enter valid seeds (1–16) for both winner and loser.'); return;
+  }
+  if (wSeed === lSeed && wRegion === lRegion) {
+    alert('Winner and loser cannot be the same team.'); return;
+  }
+
+  const dup = state.results.find(r =>
+    r.round === round && r.winnerRegion === wRegion && r.winnerSeed === wSeed
+  );
+  if (dup) {
+    if (!confirm(`A result for ${round} – ${wRegion} #${wSeed} already exists. Overwrite?`)) return;
+    state.results = state.results.filter(r =>
+      !(r.round === round && r.winnerRegion === wRegion && r.winnerSeed === wSeed)
+    );
+  }
+
+  state.results.push({ id: uid(), round, winnerSeed: wSeed, winnerRegion: wRegion, loserSeed: lSeed, loserRegion: lRegion });
+  save(); renderAll();
+
+  document.getElementById('r-w-seed').value = '';
+  document.getElementById('r-l-seed').value = '';
+}
+
+function removeResult(id) {
+  state.results = state.results.filter(r => r.id !== id);
+  save(); renderAll();
+}
+
+function clearAllResults() {
+  if (!confirm('Clear ALL results? All scores will reset to 0.')) return;
+  state.results = []; save(); renderAll();
+}
+
+function renderResults() {
+  const body  = document.getElementById('res-body');
+  const card  = document.getElementById('res-list-card');
+  const total = document.getElementById('res-total');
+  total.textContent = state.results.length;
+
+  if (!state.results.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const roundOrder = r => ROUNDS.indexOf(r);
+  const sorted = [...state.results].sort((a, b) =>
+    roundOrder(a.round) - roundOrder(b.round) ||
+    a.winnerRegion.localeCompare(b.winnerRegion) ||
+    a.winnerSeed - b.winnerSeed
+  );
+
+  body.innerHTML = sorted.map(r => {
+    const u = isUpset(r.winnerSeed, r.loserSeed);
+    return `
+      <tr>
+        <td><span class="result-tag">${r.round}</span></td>
+        <td><strong>${r.winnerRegion} #${r.winnerSeed}</strong> <span class="text-muted">wins</span></td>
+        <td class="text-muted">${r.loserRegion} #${r.loserSeed}</td>
+        <td>${u ? `<span class="result-tag upset-label">UPSET +${UPSET_BONUS}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td><button class="btn btn-ghost btn-xs" onclick="removeResult('${r.id}')">✕</button></td>
+      </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// IMPORT / EXPORT
+// ══════════════════════════════════════════════════════════
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), {
+    href: url, download: `march-madness-${new Date().toISOString().slice(0,10)}.json`
+  });
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function importJSON() {
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' });
+  inp.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data.participants) || !Array.isArray(data.results))
+          throw new Error('Missing participants or results arrays.');
+        if (!confirm('Replace all current data with the imported snapshot?')) return;
+        state = data; save(); renderAll();
+        alert('Import successful!');
+      } catch(err) { alert('Import failed: ' + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
+
+// ══════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ══════════════════════════════════════════════════════════
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-list button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'picks') refreshPicksSelectors();
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════════════════════
+function renderAll() {
+  renderLeaderboard();
+  renderParticipants();
+  renderResults();
+  refreshPicksSelectors();
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+initPersistence();
+</script>
+</body>
+</html>
