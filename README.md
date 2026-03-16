@@ -1,7 +1,7 @@
 # 🏀 March Madness Bracket Tracker
 
 A self-contained, single-file bracket scoring calculator for friend groups.
-Firebase-backed for live sync across all browsers — everyone sees the leaderboard update in real time.
+Firebase-backed for live sync across all browsers so everyone sees the leaderboard update in real time.
 
 ## Features
 
@@ -17,21 +17,9 @@ Firebase-backed for live sync across all browsers — everyone sees the leaderbo
 
 ---
 
-## Deploy to GitHub Pages
+## Firebase Setup
 
-### Step 1 — Fork and host the file
-
-1. Fork this repo (or create a new repo and drop `index.html` in the root)
-2. Go to **Settings → Pages**
-3. Under *Source*, select **Deploy from a branch**
-4. Set branch to **main**, folder to **/ (root)**
-5. Click **Save** — your site will be live at `https://<your-username>.github.io/<repo-name>/` within ~60 seconds
-
----
-
-## Firebase Setup (required for live sync)
-
-Without Firebase the app still works, but data is stored in the browser only — other people opening the URL see an empty app. Follow these steps once to enable shared, real-time state.
+Without Firebase the app still works, but data is stored in the browser only, so other people opening the URL see an empty app. Follow these steps once to enable shared, real-time state.
 
 ### Step 1 — Create a Firebase project
 
