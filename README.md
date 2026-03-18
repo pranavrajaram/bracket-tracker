@@ -7,13 +7,14 @@ Firebase-backed for live sync across all browsers so everyone sees the leaderboa
 
 - **Multiple brackets per person** (up to 3) with editable names
 - **Fibonacci scoring**: R64=1, R32=2, S16=3, E8=5, FF=8, CHAMP=13
-- **+2 upset bonus** when winning seed beats a team seeded 3+ higher (e.g. 11 over 6 ✅, 9 over 8 ❌)
+- **+2 upset bonus** when winning seed beats a team seeded 3+ lower (seed diff ≥ 3, e.g. 11 over 6 ✅, 9 over 8 ❌)
 - **Right winner wins** — picks score based on the winning team advancing, regardless of who they actually beat
 - **Live leaderboard** ranked by best bracket per participant, expandable to show all brackets
 - **Admin results panel** — one source of truth for game results, shared across all brackets
 - **Live sync via Firebase** — all browsers connected to the same database update instantly
 - **Offline fallback** — works on localStorage if Firebase is not configured, and queues writes when offline
 - **Export / Import JSON** — back up state and restore from a snapshot
+- **🤖 ESPN bracket importer** — paste your ESPN bracket text and let GPT auto-fill all 63 picks (requires an OpenAI API key)
 
 ---
 
@@ -107,6 +108,23 @@ To set rules: Firebase Console → Realtime Database → **Rules** tab → paste
 - FF and CHAMP use Region + Seed selectors
 - Click **💾 Save Picks** (also auto-saves when switching rounds)
 - ✓ indicators appear next to picks that have already scored
+
+#### 🤖 Importing picks from ESPN
+
+1. Go to your ESPN bracket page and open the bracket you want to import
+2. Select all text on the page (**Ctrl+A** / **Cmd+A**) and copy it
+3. In the Picks tab, select the participant and bracket you want to fill
+4. Click **🤖 Import ESPN**
+5. Enter your **OpenAI API key** (stored in your browser only, never leaves your device except to OpenAI)
+6. Paste the copied bracket text into the textarea
+7. Click **Parse Bracket** — GPT will extract all 63 picks and show a count per round
+8. Review the results, then click **Apply to Bracket**
+
+> **Cost:** A single parse call uses about 2,000–4,000 tokens. With `gpt-4o-mini` this is a fraction of a cent. `gpt-4o` is ~10× more expensive but rarely needed for this task.
+>
+> **Missing picks:** If GPT can't determine some picks (usually the CHAMP pick), the remaining slots stay empty. Fill them in manually using the round tabs.
+>
+> **API key safety:** The key is stored in `localStorage` under `mm_oai_key` and is only sent directly to `api.openai.com`. It is not stored in Firebase or shared with anyone.
 
 ### Results tab (admin)
 - One person enters game results: Round, Winner Region + Seed, Loser Region + Seed

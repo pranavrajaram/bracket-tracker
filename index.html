@@ -166,6 +166,7 @@ tbody tr:hover td { background: rgba(255,255,255,.025); }
   font-size: 12px; font-weight: 600;
 }
 .pill-orange { background: rgba(244,115,33,.15); color: var(--accent); }
+.pill-red    { background: rgba(229,115,115,.15); color: var(--red); }
 .pill-green  { background: rgba(76,175,125,.15); color: var(--green); }
 .pill-muted  { background: var(--surface2); color: var(--muted); }
 
@@ -247,6 +248,75 @@ tbody tr:hover td { background: rgba(255,255,255,.025); }
   .picks-grid { grid-template-columns: 1fr 1fr; }
   .hide-sm { display: none !important; }
 }
+
+/* ── ESPN parse modal ── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  backdrop-filter: blur(3px); z-index: 500;
+  display: none; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-bg.open { display: flex; }
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); width: 100%; max-width: 580px;
+  max-height: 92vh; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.modal-head h3 { font-size: 14px; font-weight: 600; }
+.modal-body { padding: 16px; }
+.modal-foot {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0;
+}
+.modal-tabs {
+  display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.modal-tab {
+  padding: 10px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .15s, border-color .15s; background: none; border-top: none;
+  border-left: none; border-right: none; letter-spacing: .04em; text-transform: uppercase;
+}
+.modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.modal-tab-pane { display: none; }
+.modal-tab-pane.active { display: block; }
+.howto-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.howto-step:last-child { border-bottom: none; }
+.howto-num {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.howto-text { font-size: 13px; line-height: 1.5; color: var(--text); }
+.howto-text strong { color: var(--accent); }
+.howto-note {
+  margin-top: 12px; padding: 10px 12px;
+  background: rgba(244,115,33,.08); border: 1px solid rgba(244,115,33,.25);
+  border-radius: var(--r); font-size: 12px; color: var(--muted); line-height: 1.5;
+}
+.spinner {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+  animation: spin .6s linear infinite; vertical-align: middle; margin-right: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+textarea {
+  width: 100%; resize: vertical;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.5; outline: none; min-height: 160px;
+  font-family: inherit;
+}
+textarea:focus { border-color: var(--accent); }
+.parse-counts { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.parse-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -478,6 +548,92 @@ tbody tr:hover td { background: rgba(255,255,255,.025); }
 </div>
 
 </main>
+
+<!-- ════════════════════════════════════════════
+     ESPN BRACKET PARSER MODAL
+════════════════════════════════════════════ -->
+<div id="espn-modal" class="modal-bg" onclick="if(event.target===this)closeESPNModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>📋 Import from ESPN Bracket</h3>
+      <button class="btn btn-ghost btn-xs" onclick="closeESPNModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="espn-tab-paste" onclick="switchESPNTab('paste')">Paste</button>
+      <button class="modal-tab"        id="espn-tab-howto" onclick="switchESPNTab('howto')">How to copy ❓</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- ── PASTE TAB ── -->
+      <div class="modal-tab-pane active" id="espn-pane-paste">
+        <div class="form-group">
+          <label class="field-label">ESPN Bracket Text
+            <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">
+              — use the Print Bracket view, then Cmd/Ctrl+A → copy → paste
+            </span>
+          </label>
+          <textarea id="espn-text" placeholder="Paste the full ESPN print-bracket text here…"></textarea>
+        </div>
+        <div id="espn-result" style="display:none"></div>
+      </div>
+
+      <!-- ── HOW-TO TAB ── -->
+      <div class="modal-tab-pane" id="espn-pane-howto">
+        <div class="howto-step">
+          <div class="howto-num">1</div>
+          <div class="howto-text">
+            Go to <strong>espn.com/tournament-challenge-bracket</strong> and open your bracket.
+          </div>
+        </div>
+        <div class="howto-step">
+          <div class="howto-num">2</div>
+          <div class="howto-text">
+            Click the <strong>Print Bracket</strong> button near the top of your bracket page.
+            This opens a print-friendly page that shows <em>all rounds</em> — including the
+            Final Four and Championship — which the regular view hides in dropdowns.
+          </div>
+        </div>
+        <div class="howto-step">
+          <div class="howto-num">3</div>
+          <div class="howto-text">
+            Once the print page is open, press <strong>Cmd+P</strong> (Mac) or
+            <strong>Ctrl+P</strong> (Windows) to open the print preview, then
+            <strong>click anywhere inside the preview window</strong> to focus it.
+          </div>
+        </div>
+        <div class="howto-step">
+          <div class="howto-num">4</div>
+          <div class="howto-text">
+            Press <strong>Cmd+A</strong> / <strong>Ctrl+A</strong> to select all text,
+            then <strong>Cmd+C</strong> / <strong>Ctrl+C</strong> to copy.
+          </div>
+        </div>
+        <div class="howto-step">
+          <div class="howto-num">5</div>
+          <div class="howto-text">
+            Switch to the <strong>Paste</strong> tab above, paste the text, and click
+            <strong>Parse Bracket</strong>.
+          </div>
+        </div>
+        <div class="howto-note">
+          ⚠️ <strong>Why the print view?</strong> The regular ESPN bracket page collapses the
+          Final Four and Championship sections into dropdowns. Selecting all on that page misses
+          those picks. The print view renders every round flat, so all 63 picks are captured.
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="espn-parse-btn" onclick="parseESPNBracket()">
+        📋 Parse Bracket
+      </button>
+      <button class="btn btn-secondary" id="espn-apply-btn" onclick="applyParsedPicks()" style="display:none">
+        ✓ Apply to Bracket
+      </button>
+      <button class="btn btn-ghost" onclick="closeESPNModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════════════════
@@ -960,8 +1116,9 @@ function renderPicksForm() {
   area.innerHTML = `
     <div class="round-tabs">${tabsHtml}</div>
     <div id="picks-round-area"></div>
-    <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+    <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="savePicks()">💾 Save Picks</button>
+      <button class="btn btn-secondary" onclick="openESPNModal()">🤖 Import ESPN</button>
       <span id="save-msg" style="font-size:12px;color:var(--green);display:none">✓ Saved!</span>
     </div>`;
 
@@ -1242,6 +1399,222 @@ function esc(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════════════════
+// ESPN BRACKET PARSER  (programmatic — no API key needed)
+// ══════════════════════════════════════════════════════════
+let parsedESPNPicks = null;
+
+// Each entry: [region, seed, canonicalName, nameRegex]
+// Seeds anchor every search so substring collisions
+// (Michigan/Michigan St, Iowa/Iowa State, etc.) are impossible.
+const ESPN_TEAMS = [
+  // EAST
+  ['East',    1,  'Duke',                /Duke/],
+  ['East',    2,  'UConn',               /UConn/i],
+  ['East',    3,  'Michigan State',      /Michigan\s+St(?:ate)?/i],
+  ['East',    4,  'Kansas',              /Kansas/i],
+  ['East',    5,  "St. John's",          /St\.?\s*John/i],
+  ['East',    6,  'Louisville',          /Louisville/i],
+  ['East',    7,  'UCLA',                /UCLA/i],
+  ['East',    8,  'Ohio State',          /Ohio\s+State/i],
+  ['East',    9,  'TCU',                 /TCU/i],
+  ['East',    10, 'UCF',                 /UCF/i],
+  ['East',    11, 'South Florida',       /South\s+Florida/i],
+  ['East',    12, 'Northern Iowa',       /Northern\s+Iowa/i],
+  ['East',    13, 'Cal Baptist',         /C[Aa]\.?\s*Baptist/i],
+  ['East',    14, 'North Dakota State',  /N(?:orth)?\s*\.?\s*Dakota\s+St/i],
+  ['East',    15, 'Furman',              /Furman/i],
+  ['East',    16, 'Siena',               /Siena/i],
+  // WEST
+  ['West',    1,  'Arizona',             /Arizona/i],
+  ['West',    2,  'Purdue',              /Purdue/i],
+  ['West',    3,  'Gonzaga',             /Gonzaga/i],
+  ['West',    4,  'Arkansas',            /Arkansas/i],
+  ['West',    5,  'Wisconsin',           /Wisconsin/i],
+  ['West',    6,  'BYU',                 /BYU/i],
+  ['West',    7,  'Miami (FL)',          /Miami(?!\s*\(?OH)/i],
+  ['West',    8,  'Villanova',           /Villanova/i],
+  ['West',    9,  'Utah State',          /Utah\s+State/i],
+  ['West',    10, 'Missouri',            /Missouri/i],
+  ['West',    11, 'Texas/NC State',      /TEX\/NCSU|Texas\s*\/\s*NC/i],
+  ['West',    12, 'High Point',          /High\s+Point/i],
+  ['West',    13, "Hawai'i",             /Hawai.i/i],
+  ['West',    14, 'Kennesaw State',      /Kennesaw\s+St(?:ate)?/i],
+  ['West',    15, 'Queens',              /Queens/i],
+  ['West',    16, 'Long Island',         /Long\s+Island/i],
+  // MIDWEST
+  ['Midwest', 1,  'Michigan',            /Michigan(?!\s+St)/i],
+  ['Midwest', 2,  'Iowa State',          /Iowa\s+State/i],
+  ['Midwest', 3,  'Virginia',            /Virginia/i],
+  ['Midwest', 4,  'Alabama',             /Alabama/i],
+  ['Midwest', 5,  'Texas Tech',          /Texas\s+Tech/i],
+  ['Midwest', 6,  'Tennessee',           /Tennessee(?!\s+St)/i],
+  ['Midwest', 7,  'Kentucky',            /Kentucky/i],
+  ['Midwest', 8,  'Georgia',             /Georgia/i],
+  ['Midwest', 9,  'Saint Louis',         /Saint\s+Louis/i],
+  ['Midwest', 10, 'Santa Clara',         /Santa\s+Clara/i],
+  ['Midwest', 11, 'Miami (OH)/SMU',      /M-OH\/SMU|Miami\s*\(?OH/i],
+  ['Midwest', 12, 'Akron',               /Akron/i],
+  ['Midwest', 13, 'Hofstra',             /Hofstra/i],
+  ['Midwest', 14, 'Wright State',        /Wright\s+St(?:ate)?/i],
+  ['Midwest', 15, 'Tennessee State',     /Tennessee\s+St(?:ate)?/i],
+  ['Midwest', 16, 'UMBC/Howard',         /UMBC(?:\/HOW)?/i],
+  // SOUTH
+  ['South',   1,  'Florida',             /Florida/i],
+  ['South',   2,  'Houston',             /Houston/i],
+  ['South',   3,  'Illinois',            /Illinois/i],
+  ['South',   4,  'Nebraska',            /Nebraska/i],
+  ['South',   5,  'Vanderbilt',          /Vanderbilt/i],
+  ['South',   6,  'North Carolina',      /North\s+Carolina/i],
+  ['South',   7,  "Saint Mary's",        /Saint\s+Mary/i],
+  ['South',   8,  'Clemson',             /Clemson/i],
+  ['South',   9,  'Iowa',                /Iowa(?!\s+State)/i],
+  ['South',   10, 'Texas A&M',           /Texas\s+A&M/i],
+  ['South',   11, 'VCU',                 /VCU/i],
+  ['South',   12, 'McNeese',             /McNeese/i],
+  ['South',   13, 'Troy',                /Troy/i],
+  ['South',   14, 'Penn',                /Penn(?!\s+State)/i],
+  ['South',   15, 'Idaho',               /Idaho/i],
+  ['South',   16, 'Prairie View/Lehigh', /PV\/LEH|Prairie\s+View/i],
+];
+
+// Count → rounds won:  count ≥ 2 → won R64, ≥3 → R32, ≥4 → S16, ≥5 → E8, =6 → FF
+// Champion label → CHAMP pick
+const ESPN_ROUND_THRESHOLDS = [['R64',2],['R32',3],['S16',4],['E8',5],['FF',6]];
+
+function runESPNParser(rawText) {
+  // Normalize apostrophes
+  rawText = rawText.replace(/[\u2018\u2019\u02BC]/g, "'");
+
+  // Step 1: seed-anchored counts
+  const counts = {};
+  for (const [region, seed, , namePat] of ESPN_TEAMS) {
+    const anchored = new RegExp('\\b' + seed + '\\s+(?:' + namePat.source + ')', 'gi');
+    counts[`${region}|${seed}`] = (rawText.match(anchored) || []).length;
+  }
+
+  // Step 2: find champion — search text before "Champion"
+  let champion = null;
+  const champCtxMatch = rawText.match(/.{3,80}?(?=\s*Champion)/i);
+  if (champCtxMatch) {
+    const ctx = champCtxMatch[0];
+    for (const [region, seed, , namePat] of ESPN_TEAMS) {
+      if (namePat.test(ctx)) { champion = { region, seed }; break; }
+    }
+  }
+
+  // Step 3: build picks
+  const picks = [];
+  for (const [region, seed] of ESPN_TEAMS) {
+    const c = counts[`${region}|${seed}`];
+    for (const [rnd, thr] of ESPN_ROUND_THRESHOLDS) {
+      if (c >= thr) picks.push({ round: rnd, winnerRegion: region, winnerSeed: seed });
+    }
+  }
+  if (champion) picks.push({ round: 'CHAMP', winnerRegion: champion.region, winnerSeed: champion.seed });
+
+  // Step 4: per-round counts + warnings
+  const roundCounts = {};
+  ROUNDS.forEach(r => roundCounts[r] = 0);
+  picks.forEach(p => roundCounts[p.round]++);
+  const expected = { R64:32, R32:16, S16:8, E8:4, FF:2, CHAMP:1 };
+  const warnings = Object.entries(expected)
+    .filter(([r, exp]) => roundCounts[r] !== exp)
+    .map(([r, exp]) => `${r}: got ${roundCounts[r]}, expected ${exp}`);
+
+  // Debug: teams not found
+  const missing = ESPN_TEAMS
+    .filter(([region, seed]) => counts[`${region}|${seed}`] === 0)
+    .map(([region, seed, name]) => `${name} (${region} ${seed})`);
+
+  return { picks, roundCounts, warnings, missing };
+}
+
+function switchESPNTab(tab) {
+  ['paste','howto'].forEach(t => {
+    document.getElementById(`espn-tab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`espn-pane-${t}`).classList.toggle('active', t === tab);
+  });
+}
+
+function openESPNModal() {
+  document.getElementById('espn-modal').classList.add('open');
+  switchESPNTab('paste');
+  parsedESPNPicks = null;
+  document.getElementById('espn-result').style.display = 'none';
+  document.getElementById('espn-apply-btn').style.display = 'none';
+  document.getElementById('espn-text').value = '';
+}
+
+function closeESPNModal() {
+  document.getElementById('espn-modal').classList.remove('open');
+}
+
+function parseESPNBracket() {
+  const text     = document.getElementById('espn-text').value.trim();
+  const resultEl = document.getElementById('espn-result');
+  const applyBtn = document.getElementById('espn-apply-btn');
+
+  if (!text) { alert('Paste your ESPN bracket text first.'); return; }
+
+  parsedESPNPicks = null;
+  applyBtn.style.display = 'none';
+
+  try {
+    const { picks, roundCounts, warnings, missing } = runESPNParser(text);
+    if (!picks.length) throw new Error('No picks found — is this ESPN bracket text?');
+
+    const countHtml = ROUNDS.map(r => {
+      const ok = roundCounts[r] === { R64:32, R32:16, S16:8, E8:4, FF:2, CHAMP:1 }[r];
+      return `<span class="pill ${ok ? 'pill-orange' : 'pill-red'}">${r}: ${roundCounts[r]}</span>`;
+    }).join('');
+
+    const warnHtml = warnings.length
+      ? `<div class="parse-note" style="color:var(--gold)">⚠️ ${warnings.join(' · ')}</div>` : '';
+    const missHtml = missing.length
+      ? `<div class="parse-note" style="color:var(--muted);font-size:11px">Not found: ${missing.join(', ')}</div>` : '';
+
+    resultEl.innerHTML = `
+      <div style="background:var(--surface2);border-radius:var(--r);padding:12px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">
+          ${warnings.length ? '⚠️' : '✓'} Parsed ${picks.length} of 63 picks
+        </div>
+        <div class="parse-counts">${countHtml}</div>
+        ${warnHtml}${missHtml}
+        ${picks.length < 63 ? `<div class="parse-note" style="color:var(--gold)">
+          ${63 - picks.length} picks missing — fill them in manually after applying.
+        </div>` : ''}
+      </div>`;
+    resultEl.style.display = 'block';
+    parsedESPNPicks = picks;
+    applyBtn.style.display = 'inline-flex';
+
+  } catch (err) {
+    resultEl.innerHTML = `
+      <div style="background:rgba(229,115,115,.1);border:1px solid rgba(229,115,115,.3);
+                  border-radius:var(--r);padding:12px;color:var(--red);font-size:13px">
+        ❌ ${esc(err.message)}
+      </div>`;
+    resultEl.style.display = 'block';
+  }
+}
+
+function applyParsedPicks() {
+  const bracket = getActiveBracket();
+  if (!bracket || !parsedESPNPicks) return;
+  if (!confirm(`Apply ${parsedESPNPicks.length} parsed picks to "${bracket.name}"? This replaces all existing picks in this bracket.`)) return;
+
+  bracket.picks = parsedESPNPicks;
+  save();
+  closeESPNModal();
+  activePicksRound = 'R64';
+  renderPicksForm();
+  renderLeaderboard();
+
+  const msg = document.getElementById('save-msg');
+  if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
 }
 
 // ══════════════════════════════════════════════════════════
