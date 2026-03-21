@@ -1189,9 +1189,7 @@ function renderPicksRound(bracket) {
       const resultHit = val
         ? state.results.some(r => r.round === round && r.winnerRegion === region && r.winnerSeed === Number(val))
         : false;
-      const label = round === 'R64'
-        ? `${R64_MATCHUPS[i][0]} vs ${R64_MATCHUPS[i][1]}`
-        : `Winner ${i + 1}`;
+      const label = `Winner ${i + 1}`;
       html += `
         <div class="pick-row">
           <span class="pick-label">${label}</span>
