@@ -385,6 +385,7 @@ textarea:focus { border-color: var(--accent); }
           <th class="hide-sm">CHAMP</th>
           <th>Upsets</th>
           <th>Total</th>
+          <th>Max</th>
           <th></th>
         </tr>
       </thead>
@@ -812,6 +813,35 @@ function scorePick(pick) {
   return { points: ROUND_POINTS[pick.round] + (u ? UPSET_BONUS : 0), hit: true, wasUpset: u };
 }
 
+// Returns the maximum points this bracket can still achieve.
+// = current score + points for picks that are (a) not yet decided and (b) team still alive.
+function maxPossible(bracket) {
+  const { total: current } = scoreBracket(bracket);
+
+  // Teams already eliminated (appeared as loser in any result)
+  const eliminated = new Set(
+    state.results.map(r => `${r.loserRegion}|${r.loserSeed}`)
+  );
+
+  let extra = 0;
+  for (const pick of bracket.picks) {
+    const key = `${pick.winnerRegion}|${pick.winnerSeed}`;
+    if (eliminated.has(key)) continue;  // team is out
+
+    // Check if this specific pick's round slot has already been decided for this team
+    const decided = state.results.some(r =>
+      r.round === pick.round && (
+        (r.winnerRegion === pick.winnerRegion && r.winnerSeed === Number(pick.winnerSeed)) ||
+        (r.loserRegion  === pick.winnerRegion && r.loserSeed  === Number(pick.winnerSeed))
+      )
+    );
+    if (decided) continue;  // already hit (in current) or missed — skip
+
+    extra += ROUND_POINTS[pick.round];
+  }
+  return current + extra;
+}
+
 // Returns { breakdown:{R64:n,...}, upsetCount, total, hits }
 function scoreBracket(bracket) {
   const breakdown = {};
@@ -830,12 +860,12 @@ function scoreBracket(bracket) {
   return { breakdown, upsetCount, total, hits };
 }
 
-// Returns sorted array of { participant, bracketScores:[{bracket,score}], bestScore }
+// Returns sorted array of { participant, bracketScores:[{bracket,score,max}], bestScore }
 function buildLeaderboard() {
   return state.participants
     .filter(p => p.brackets.length > 0)
     .map(p => {
-      const bracketScores = p.brackets.map(b => ({ bracket: b, score: scoreBracket(b) }));
+      const bracketScores = p.brackets.map(b => ({ bracket: b, score: scoreBracket(b), max: maxPossible(b) }));
       const bestScore = Math.max(...bracketScores.map(bs => bs.score.total), 0);
       return { participant: p, bracketScores, bestScore };
     })
@@ -863,7 +893,7 @@ function renderLeaderboard() {
   let rank = 1;
   let html = '';
 
-  for (const { participant: p, bracketScores, bestScore } of lb) {
+  for (const { participant: p, bracketScores } of lb) {
     const sorted  = [...bracketScores].sort((a, b) => b.score.total - a.score.total);
     const best    = sorted[0];
     const rankCls = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-other';
@@ -877,6 +907,7 @@ function renderLeaderboard() {
         ${ROUNDS.map(r => `<td class="hide-sm">${best.score.breakdown[r] || 0}</td>`).join('')}
         <td><span class="pill pill-green">+${best.score.upsetCount * UPSET_BONUS}</span></td>
         <td><span class="pill pill-orange">${best.score.total}</span></td>
+        <td><span class="pill pill-muted">${best.max}</span></td>
         <td>${multi
           ? `<button class="expand-btn" id="xbtn-${p.id}" onclick="toggleSub('${p.id}')">▼</button>`
           : ''
@@ -886,7 +917,7 @@ function renderLeaderboard() {
     if (multi) {
       html += `
         <tr class="sub-row" id="sub-${p.id}">
-          <td colspan="12">
+          <td colspan="13">
             <div class="sub-inner">
               <table style="width:100%">
                 <thead><tr>
@@ -894,6 +925,7 @@ function renderLeaderboard() {
                   ${ROUNDS.map(r => `<th>${r}</th>`).join('')}
                   <th>Upsets</th>
                   <th>Total</th>
+                  <th>Max</th>
                 </tr></thead>
                 <tbody>
                   ${sorted.map(bs => `
@@ -902,6 +934,7 @@ function renderLeaderboard() {
                       ${ROUNDS.map(r => `<td>${bs.score.breakdown[r] || 0}</td>`).join('')}
                       <td><span class="pill pill-green">+${bs.score.upsetCount * UPSET_BONUS}</span></td>
                       <td><span class="pill pill-orange">${bs.score.total}</span></td>
+                      <td><span class="pill pill-muted">${bs.max}</span></td>
                     </tr>`).join('')}
                 </tbody>
               </table>
